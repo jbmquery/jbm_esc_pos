@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "320285086131",
+    "project_id": "jbm-escpos-database",
+    "storage_bucket": "jbm-escpos-database.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:320285086131:android:dd06b826bf4eb3d1f07bc6",
+        "android_client_info": {
+          "package_name": "com.example.jbm_escpos"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCVqi4Drts40naPDfE9JS2MfimLzeQ3cUc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

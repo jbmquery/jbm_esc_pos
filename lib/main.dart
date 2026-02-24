@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 
-// 🔥 FIREBASE DESACTIVADO TEMPORALMENTE
-// import 'package:firebase_core/firebase_core.dart';
-// import 'firebase_options.dart';
-
-void main() {
-  // 🔥 Si en algún momento activas Firebase:
-  // WidgetsFlutterBinding.ensureInitialized();
-  // await Firebase.initializeApp();
-
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 

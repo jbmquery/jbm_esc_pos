@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/firebase_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +16,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String printerName = "Ninguna seleccionada";
   String printerMac = "--:--:--:--:--:--";
   String printerType = "Bluetooth";
+
+  final FirebaseService _firebaseService = FirebaseService();
 
   @override
   Widget build(BuildContext context) {
@@ -127,8 +130,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
-                      // 🔜 AQUÍ IRÁ LA LÓGICA PARA GUARDAR EN FIREBASE
+                    onPressed: () async {
+                      await _firebaseService.registerDevice(
+                        printerName: printerName,
+                        printerMac: printerMac,
+                        printerType: printerType,
+                      );
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Configuración guardada correctamente"),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
                     },
                     child: const Text("Guardar"),
                   ),
