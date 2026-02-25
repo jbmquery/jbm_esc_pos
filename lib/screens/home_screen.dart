@@ -1,5 +1,7 @@
+// home_screen.dart
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -11,6 +13,10 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String selectedPaperSize = "58mm";
   int selectedCopies = 1;
+  String estadoApp = "free";
+  bool isBlocked = false;
+  bool isLoading = true;
+  int diasRestantes = 0;
 
   // Datos visuales de impresora (luego se guardarán en Firebase)
   String printerName = "Ninguna seleccionada";
@@ -20,7 +26,66 @@ class _HomeScreenState extends State<HomeScreen> {
   final FirebaseService _firebaseService = FirebaseService();
 
   @override
+  void initState() {
+    super.initState();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    try {
+      final result = await _firebaseService.checkAndInitializeDevice();
+
+      if (result != null) {
+        setState(() {
+          estadoApp = result["estado"] ?? "free";
+          isBlocked = result["is_blocked"] ?? false;
+          printerName = result["printer_name"] ?? printerName;
+          printerMac = result["printer_mac"] ?? printerMac;
+          printerType = result["printer_type"] ?? printerType;
+          selectedPaperSize = result["paper_size"] ?? selectedPaperSize;
+          selectedCopies = result["copies"] ?? selectedCopies;
+        });
+      }
+      if (result != null &&
+          result["fecha_expiracion"] != null &&
+          estadoApp == "free") {
+        final Timestamp exp = result["fecha_expiracion"];
+        final DateTime expiration = exp.toDate();
+        final DateTime now = DateTime.now();
+
+        diasRestantes = expiration.difference(now).inDays;
+
+        if (diasRestantes < 0) {
+          diasRestantes = 0;
+        }
+      }
+    } catch (e) {
+      print("ERROR INIT: $e");
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (isBlocked) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            "Este dispositivo ha sido bloqueado.\nContacte al administrador.",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Configuración de Impresión"),
@@ -135,6 +200,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         printerName: printerName,
                         printerMac: printerMac,
                         printerType: printerType,
+                        paperSize: selectedPaperSize,
+                        copies: selectedCopies,
                       );
 
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -249,26 +316,40 @@ class _HomeScreenState extends State<HomeScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
+            children: [
+              const Text(
                 "Si desea adquirir la versión premium contacta a este número:",
               ),
-              SizedBox(height: 15),
+              const SizedBox(height: 15),
 
-              Text(
+              const Text(
                 "+51 931530445",
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
 
-              SizedBox(height: 10),
+              const SizedBox(height: 10),
 
               Text(
-                "Estado: Free",
+                "Estado: $estadoApp",
                 style: TextStyle(
-                  color: Colors.grey,
+                  color: estadoApp == "premium"
+                      ? Colors.green
+                      : estadoApp == "expired"
+                      ? Colors.red
+                      : Colors.grey,
                   fontWeight: FontWeight.w500,
                 ),
               ),
+              if (estadoApp == "free") ...[
+                const SizedBox(height: 5),
+                Text(
+                  "Días gratis: $diasRestantes",
+                  style: const TextStyle(
+                    color: Colors.blueGrey,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ],
           ),
           actions: [

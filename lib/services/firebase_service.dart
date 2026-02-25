@@ -35,6 +35,8 @@ class FirebaseService {
     required String printerName,
     required String printerMac,
     required String printerType,
+    required String paperSize,
+    required int copies,
   }) async {
     String deviceId = await getDeviceId();
     Map<String, dynamic> deviceData = await getDeviceData();
@@ -63,6 +65,8 @@ class FirebaseService {
         "printer_name": printerName,
         "printer_mac": printerMac,
         "printer_type": printerType,
+        "paper_size": paperSize,
+        "copies": copies,
       });
     } else {
       await docRef.update({
@@ -70,12 +74,86 @@ class FirebaseService {
         "printer_name": printerName,
         "printer_mac": printerMac,
         "printer_type": printerType,
+        "paper_size": paperSize,
+        "copies": copies,
       });
     }
   }
 
-  Future<DocumentSnapshot> getDeviceRecord() async {
+  Future<Map<String, dynamic>?> checkAndInitializeDevice() async {
     String deviceId = await getDeviceId();
-    return await _firestore.collection("devices").doc(deviceId).get();
+    Map<String, dynamic> deviceData = await getDeviceData();
+
+    final docRef = _firestore.collection("devices").doc(deviceId);
+    final doc = await docRef.get();
+
+    DateTime now = DateTime.now();
+
+    // 🆕 PRIMER USO
+    if (!doc.exists) {
+      DateTime expiration = now.add(const Duration(days: 15));
+
+      await docRef.set({
+        "device_id": deviceId,
+        "device_name": deviceData["device_name"],
+        "estado": "free",
+        "fecha_registro": now,
+        "fecha_expiracion": expiration,
+        "dias_gratis": 15,
+        "premium_desde": null,
+        "premium_hasta": null,
+        "is_blocked": false,
+        "ultimo_acceso": now,
+        "version_app": deviceData["version_app"],
+
+        // 🔧 IMPORTANTE: agregar también estos
+        "printer_name": null,
+        "printer_mac": null,
+        "printer_type": null,
+        "paper_size": null,
+        "copies": null,
+      });
+
+      return {
+        "estado": "free",
+        "is_blocked": false,
+        "printer_name": null,
+        "printer_mac": null,
+        "printer_type": null,
+        "paper_size": null,
+        "copies": null,
+        "fecha_expiracion": expiration,
+      };
+    }
+
+    // 🔁 YA EXISTE
+    final data = doc.data() as Map<String, dynamic>;
+
+    await docRef.update({"ultimo_acceso": now});
+
+    bool isBlocked = data["is_blocked"] ?? false;
+    String estado = data["estado"] ?? "free";
+
+    // ⏳ Validar expiración si es free
+    if (estado == "free") {
+      Timestamp? expTimestamp = data["fecha_expiracion"];
+      if (expTimestamp != null) {
+        DateTime expiration = expTimestamp.toDate();
+        if (now.isAfter(expiration)) {
+          estado = "expired";
+        }
+      }
+    }
+
+    return {
+      "estado": estado,
+      "is_blocked": isBlocked,
+      "printer_name": data["printer_name"],
+      "printer_mac": data["printer_mac"],
+      "printer_type": data["printer_type"],
+      "paper_size": data["paper_size"],
+      "copies": data["copies"],
+      "fecha_expiracion": data["fecha_expiracion"],
+    };
   }
 }
