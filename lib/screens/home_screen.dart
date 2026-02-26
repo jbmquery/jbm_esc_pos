@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/printer_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String printerType = "Bluetooth";
 
   final FirebaseService _firebaseService = FirebaseService();
+  final PrinterService _printerService = PrinterService();
 
   @override
   void initState() {
@@ -227,78 +229,61 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       builder: (context) {
-        String tempName = "";
-        String tempMac = "";
-        String tempType = "Bluetooth";
-
         return AlertDialog(
           title: const Text("Seleccionar Impresora"),
-          content: SingleChildScrollView(
-            child: Column(
-              children: [
-                /// 🔜 AQUÍ LUEGO IRÁ LA LISTA REAL DE DISPOSITIVOS BLUETOOTH
-                const Text(
-                  "Aquí se mostrará la lista de dispositivos térmicos detectados.",
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: FutureBuilder<List<PrinterDevice>>(
+              future: _printerService.scanBluetoothPrinters(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
 
-                const SizedBox(height: 20),
+                if (snapshot.hasError) {
+                  return const Text(
+                    "Error al escanear dispositivos.",
+                    style: TextStyle(color: Colors.red),
+                  );
+                }
 
-                TextField(
-                  decoration: const InputDecoration(
-                    labelText: "Nombre de la impresora",
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (value) => tempName = value,
-                ),
+                final devices = snapshot.data ?? [];
 
-                const SizedBox(height: 15),
+                if (devices.isEmpty) {
+                  return const Text(
+                    "No se encontraron impresoras Bluetooth.",
+                    style: TextStyle(color: Colors.grey),
+                  );
+                }
 
-                TextField(
-                  decoration: const InputDecoration(
-                    labelText: "Dirección MAC",
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (value) => tempMac = value,
-                ),
+                return ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: devices.length,
+                  itemBuilder: (context, index) {
+                    final device = devices[index];
 
-                const SizedBox(height: 15),
+                    return Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.print),
+                        title: Text(device.name),
+                        subtitle: Text(device.address),
+                        onTap: () {
+                          setState(() {
+                            printerName = device.name;
+                            printerMac = device.address;
+                            printerType = device.type;
+                          });
 
-                DropdownButtonFormField<String>(
-                  value: tempType,
-                  decoration: const InputDecoration(
-                    labelText: "Tipo de conexión",
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: "Bluetooth",
-                      child: Text("Bluetooth"),
-                    ),
-                    DropdownMenuItem(value: "USB", child: Text("USB")),
-                    DropdownMenuItem(value: "WiFi", child: Text("WiFi")),
-                  ],
-                  onChanged: (value) {
-                    tempType = value!;
+                          Navigator.pop(context);
+                        },
+                      ),
+                    );
                   },
-                ),
-
-                const SizedBox(height: 20),
-
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      printerName = tempName.isEmpty ? "Sin nombre" : tempName;
-                      printerMac = tempMac.isEmpty
-                          ? "--:--:--:--:--:--"
-                          : tempMac;
-                      printerType = tempType;
-                    });
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Guardar selección"),
-                ),
-              ],
+                );
+              },
             ),
           ),
         );
