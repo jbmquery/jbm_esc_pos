@@ -229,63 +229,110 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text("Seleccionar Impresora"),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: FutureBuilder<List<PrinterDevice>>(
-              future: _printerService.scanBluetoothPrinters(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
+        String? selectedType;
+        Future<List<PrinterDevice>>? futureDevices;
 
-                if (snapshot.hasError) {
-                  return const Text(
-                    "Error al escanear dispositivos.",
-                    style: TextStyle(color: Colors.red),
-                  );
-                }
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              title: const Text("Seleccionar Impresora"),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    /// 🔹 Selector tipo conexión
+                    DropdownButtonFormField<String>(
+                      value: selectedType,
+                      hint: const Text("Seleccionar tipo de conexión"),
+                      items: const [
+                        DropdownMenuItem(
+                          value: "Bluetooth",
+                          child: Text("Bluetooth"),
+                        ),
+                        DropdownMenuItem(value: "USB", child: Text("USB")),
+                        DropdownMenuItem(value: "WiFi", child: Text("WiFi")),
+                      ],
+                      onChanged: (value) {
+                        setModalState(() {
+                          selectedType = value;
 
-                final devices = snapshot.data ?? [];
+                          if (value == "Bluetooth") {
+                            futureDevices = _printerService
+                                .scanBluetoothPrinters();
+                          } else if (value == "USB") {
+                            futureDevices = _printerService.scanUsbPrinters();
+                          } else if (value == "WiFi") {
+                            futureDevices = _printerService.scanWifiPrinter();
+                          }
+                        });
+                      },
+                    ),
 
-                if (devices.isEmpty) {
-                  return const Text(
-                    "No se encontraron impresoras Bluetooth.",
-                    style: TextStyle(color: Colors.grey),
-                  );
-                }
+                    const SizedBox(height: 20),
 
-                return ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: devices.length,
-                  itemBuilder: (context, index) {
-                    final device = devices[index];
+                    /// 🔹 Lista dinámica
+                    if (futureDevices != null)
+                      FutureBuilder<List<PrinterDevice>>(
+                        future: futureDevices,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Padding(
+                              padding: EdgeInsets.all(20),
+                              child: CircularProgressIndicator(),
+                            );
+                          }
 
-                    return Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.print),
-                        title: Text(device.name),
-                        subtitle: Text(device.address),
-                        onTap: () {
-                          setState(() {
-                            printerName = device.name;
-                            printerMac = device.address;
-                            printerType = device.type;
-                          });
+                          if (snapshot.hasError) {
+                            return const Text(
+                              "Error al buscar dispositivos.",
+                              style: TextStyle(color: Colors.red),
+                            );
+                          }
 
-                          Navigator.pop(context);
+                          final devices = snapshot.data ?? [];
+
+                          if (devices.isEmpty) {
+                            return const Text(
+                              "No se encontraron dispositivos.",
+                              style: TextStyle(color: Colors.grey),
+                            );
+                          }
+
+                          return SizedBox(
+                            height: 200,
+                            child: ListView.builder(
+                              itemCount: devices.length,
+                              itemBuilder: (context, index) {
+                                final device = devices[index];
+
+                                return Card(
+                                  child: ListTile(
+                                    leading: const Icon(Icons.print),
+                                    title: Text(device.name),
+                                    subtitle: Text(device.address),
+                                    onTap: () {
+                                      setState(() {
+                                        printerName = device.name;
+                                        printerMac = device.address;
+                                        printerType = device.type;
+                                      });
+
+                                      Navigator.pop(context);
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
+                          );
                         },
                       ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
