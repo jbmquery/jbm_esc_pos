@@ -1,7 +1,7 @@
 //printer_service.dart
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -21,30 +21,32 @@ class PrinterDevice {
 class PrinterService {
   /// 🔵 BLUETOOTH
   Future<List<PrinterDevice>> scanBluetoothPrinters() async {
-    await Permission.bluetoothScan.request();
+    await Permission.bluetooth.request();
     await Permission.bluetoothConnect.request();
     await Permission.location.request();
 
     List<PrinterDevice> devices = [];
 
-    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 4));
+    final bluetooth = FlutterBluetoothSerial.instance;
 
-    FlutterBluePlus.scanResults.listen((results) {
-      for (ScanResult r in results) {
-        if (r.device.name.isNotEmpty) {
-          devices.add(
-            PrinterDevice(
-              name: r.device.name,
-              address: r.device.remoteId.toString(),
-              type: "Bluetooth",
-            ),
-          );
-        }
-      }
-    });
+    bool? enabled = await bluetooth.isEnabled;
 
-    await Future.delayed(const Duration(seconds: 5));
-    await FlutterBluePlus.stopScan();
+    if (enabled == false) {
+      await bluetooth.requestEnable();
+    }
+
+    // 🔥 OBTENER DISPOSITIVOS EMPAREJADOS
+    List<BluetoothDevice> bondedDevices = await bluetooth.getBondedDevices();
+
+    for (var device in bondedDevices) {
+      devices.add(
+        PrinterDevice(
+          name: device.name ?? "Bluetooth Printer",
+          address: device.address,
+          type: "Bluetooth",
+        ),
+      );
+    }
 
     return devices;
   }
@@ -100,27 +102,18 @@ class PrinterService {
   }
 
   Future<void> _sendBluetooth(List<int> bytes, String address) async {
-    final device = BluetoothDevice.fromId(address);
-
     try {
-      await device.connect(autoConnect: false);
-    } catch (_) {
-      await device.disconnect();
-      await Future.delayed(const Duration(seconds: 1));
-      await device.connect(autoConnect: false);
+      BluetoothConnection connection = await BluetoothConnection.toAddress(
+        address,
+      ).timeout(const Duration(seconds: 8));
+
+      connection.output.add(Uint8List.fromList(bytes));
+      await connection.output.allSent;
+
+      await connection.close();
+    } catch (e) {
+      print("ERROR BLUETOOTH: $e");
     }
-
-    final services = await device.discoverServices();
-
-    for (var service in services) {
-      for (var characteristic in service.characteristics) {
-        if (characteristic.properties.write) {
-          await characteristic.write(bytes, withoutResponse: true);
-        }
-      }
-    }
-
-    await device.disconnect();
   }
 
   Future<void> _sendUsb(List<int> bytes, String address) async {
