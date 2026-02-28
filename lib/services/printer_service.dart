@@ -1,5 +1,6 @@
 //printer_service.dart
-
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'package:network_info_plus/network_info_plus.dart';
@@ -75,5 +76,70 @@ class PrinterService {
     if (ip == null) return [];
 
     return [PrinterDevice(name: "Printer WiFi", address: ip, type: "WiFi")];
+  }
+
+  // =========================
+  // ENVÍO REAL A IMPRESORA
+  // =========================
+  Future<void> sendBytes({
+    required List<int> bytes,
+    required String type,
+    required String address,
+  }) async {
+    if (type == "Bluetooth") {
+      await _sendBluetooth(bytes, address);
+    }
+
+    if (type == "USB") {
+      await _sendUsb(bytes, address);
+    }
+
+    if (type == "WiFi") {
+      await _sendWifi(bytes, address);
+    }
+  }
+
+  Future<void> _sendBluetooth(List<int> bytes, String address) async {
+    final device = BluetoothDevice.fromId(address);
+
+    try {
+      await device.connect(autoConnect: false);
+    } catch (_) {
+      await device.disconnect();
+      await Future.delayed(const Duration(seconds: 1));
+      await device.connect(autoConnect: false);
+    }
+
+    final services = await device.discoverServices();
+
+    for (var service in services) {
+      for (var characteristic in service.characteristics) {
+        if (characteristic.properties.write) {
+          await characteristic.write(bytes, withoutResponse: true);
+        }
+      }
+    }
+
+    await device.disconnect();
+  }
+
+  Future<void> _sendUsb(List<int> bytes, String address) async {
+    List<UsbDevice> devices = await UsbSerial.listDevices();
+
+    for (var device in devices) {
+      if (device.deviceId.toString() == address) {
+        UsbPort? port = await device.create();
+        await port?.open();
+        await port?.write(Uint8List.fromList(bytes));
+        await port?.close();
+      }
+    }
+  }
+
+  Future<void> _sendWifi(List<int> bytes, String ip) async {
+    final socket = await Socket.connect(ip, 9100);
+    socket.add(bytes);
+    await socket.flush();
+    await socket.close();
   }
 }
