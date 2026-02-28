@@ -5,6 +5,16 @@ import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:async';
+import 'package:permission_handler/permission_handler.dart';
+
+Future<void> _requestBluetoothPermissions() async {
+  await [
+    Permission.bluetoothScan,
+    Permission.bluetoothConnect,
+    Permission.location,
+  ].request();
+}
 
 class PrinterDevice {
   final String name;
@@ -21,9 +31,7 @@ class PrinterDevice {
 class PrinterService {
   /// 🔵 BLUETOOTH
   Future<List<PrinterDevice>> scanBluetoothPrinters() async {
-    await Permission.bluetooth.request();
-    await Permission.bluetoothConnect.request();
-    await Permission.location.request();
+    await _requestBluetoothPermissions();
 
     List<PrinterDevice> devices = [];
 
@@ -102,17 +110,47 @@ class PrinterService {
   }
 
   Future<void> _sendBluetooth(List<int> bytes, String address) async {
-    try {
-      BluetoothConnection connection = await BluetoothConnection.toAddress(
-        address,
-      ).timeout(const Duration(seconds: 8));
+    const int maxRetries = 3;
 
-      connection.output.add(Uint8List.fromList(bytes));
-      await connection.output.allSent;
+    BluetoothConnection? connection;
 
-      await connection.close();
-    } catch (e) {
-      print("ERROR BLUETOOTH: $e");
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        print("🔵 Conectando Bluetooth intento $attempt...");
+
+        connection = await BluetoothConnection.toAddress(
+          address,
+        ).timeout(const Duration(seconds: 6));
+
+        print("✅ Bluetooth conectado");
+
+        // 🔥 ENVÍO DIRECTO ESC/POS (SIN discoverServices)
+        connection.output.add(Uint8List.fromList(bytes));
+
+        await connection.output.allSent.timeout(const Duration(seconds: 5));
+
+        print("🧾 Impresión enviada");
+
+        await Future.delayed(const Duration(milliseconds: 300));
+
+        await connection.close();
+
+        print("🔌 Conexión cerrada");
+
+        return;
+      } catch (e) {
+        print("❌ Error intento $attempt: $e");
+
+        try {
+          await connection?.close();
+        } catch (_) {}
+
+        if (attempt == maxRetries) {
+          throw Exception("No se pudo conectar a la impresora");
+        }
+
+        await Future.delayed(const Duration(seconds: 1));
+      }
     }
   }
 

@@ -149,6 +149,9 @@ class VoucherProcessor {
         type: config["printer_type"],
         address: config["printer_mac"],
       );
+
+      // 🔥 asegurar flush físico impresora
+      await Future.delayed(const Duration(seconds: 1));
     } catch (_) {}
   }
 }
