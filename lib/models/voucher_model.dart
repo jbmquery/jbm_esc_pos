@@ -21,6 +21,8 @@ class VoucherProcessor {
 
   static Future<void> _processJson(Map<String, dynamic> data) async {
     List<int> escposBytes = [];
+    // 🔥 RESET IMPRESORA (MUY IMPORTANTE)
+    escposBytes.addAll([0x1B, 0x40]);
 
     for (var element in data["content"]) {
       if (element["type"] == "text") {
@@ -111,7 +113,12 @@ class VoucherProcessor {
   }
 
   static Future<void> _processBinary(List<int> bytes) async {
-    await _sendToPrinter(bytes);
+    List<int> finalBytes = [];
+
+    finalBytes.addAll([0x1B, 0x40]); // reset
+    finalBytes.addAll(bytes);
+
+    await _sendToPrinter(finalBytes);
   }
 
   static List<int> _decryptFile(List<int> encryptedBytes) {
