@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/printer_service.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'dart:typed_data';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -176,6 +178,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 });
               },
             ),
+
+            const SizedBox(height: 30),
+
+            /// 4️⃣ Impresión de prueba
+            const Text(
+              "4. Impresión de prueba",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+
+            ElevatedButton(
+              onPressed: _testPrint,
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey),
+              child: const Text("Imprimir prueba"),
+            ),
+
+            const SizedBox(height: 20),
 
             const Spacer(),
 
@@ -384,6 +403,90 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cerrar"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _testPrint() async {
+    try {
+      // 🔥 1️⃣ Obtener configuración REAL desde Firebase
+      final config = await _firebaseService.checkAndInitializeDevice();
+
+      if (config == null) {
+        _showError("No se pudo obtener configuración del dispositivo.");
+        return;
+      }
+
+      if (config["printer_mac"] == null || config["printer_type"] == null) {
+        _showError("No hay impresora configurada.");
+        return;
+      }
+
+      final String printerMac = config["printer_mac"];
+      final String printerType = config["printer_type"];
+
+      // 🔥 2️⃣ Verificar Bluetooth si es Bluetooth
+      if (printerType == "Bluetooth") {
+        final bluetooth = FlutterBluetoothSerial.instance;
+        bool? enabled = await bluetooth.isEnabled;
+
+        if (enabled == false) {
+          await bluetooth.requestEnable();
+          enabled = await bluetooth.isEnabled;
+        }
+
+        if (enabled != true) {
+          _showError("Bluetooth está apagado.");
+          return;
+        }
+      }
+
+      // 🔥 3️⃣ Construir mensaje ESC/POS
+      List<int> bytes = [];
+
+      bytes.addAll([0x1B, 0x40]); // Reset
+      bytes.addAll([0x1B, 0x61, 0x01]); // Center
+      bytes.addAll([0x1B, 0x45, 0x01]); // Bold
+
+      bytes.addAll(
+        Uint8List.fromList("La impresora si esta conectado\n\n".codeUnits),
+      );
+
+      bytes.addAll([0x1B, 0x45, 0x00]); // Bold off
+      bytes.addAll([0x1D, 0x56, 0x41, 0x10]); // Cut paper
+
+      // 🔥 4️⃣ Intentar enviar a impresora
+      await _printerService.sendBytes(
+        bytes: bytes,
+        type: printerType,
+        address: printerMac,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Impresión enviada correctamente"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      _showError("No hay conexión con la impresora.");
+    }
+  }
+
+  void _showError(String message) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Error"),
+          content: Text(message),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),

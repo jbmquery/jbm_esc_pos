@@ -1,3 +1,4 @@
+//file: lib/utils/debug_overlay.dart
 import 'package:flutter/material.dart';
 
 class DebugOverlay {
