@@ -8,14 +8,24 @@ import 'dart:typed_data';
 
 class VoucherProcessor {
   static Future<void> processFile(File file) async {
-    final raw = await file.readAsBytes();
-    final decrypted = _decryptFile(raw);
+    print("Procesando archivo: ${file.path}");
 
-    if (file.path.endsWith(".json")) {
-      final jsonData = jsonDecode(utf8.decode(decrypted));
+    final raw = await file.readAsBytes();
+
+    List<int> dataBytes;
+
+    // 🔐 SOLO desencriptar archivos .jbm
+    if (file.path.endsWith(".jbm")) {
+      dataBytes = _decryptFile(raw);
+    } else {
+      dataBytes = raw;
+    }
+
+    if (file.path.endsWith(".json") || file.path.endsWith(".jbm")) {
+      final jsonData = jsonDecode(utf8.decode(dataBytes));
       await _processJson(jsonData);
     } else if (file.path.endsWith(".bin")) {
-      await _processBinary(decrypted);
+      await _processBinary(dataBytes);
     }
   }
 
@@ -135,8 +145,12 @@ class VoucherProcessor {
   }
 
   static Future<void> _sendToPrinter(List<int> bytes) async {
+    print("🔥 entrando a _sendToPrinter");
+
     final firebase = FirebaseService();
     final config = await firebase.checkAndInitializeDevice();
+
+    print("CONFIG DEVICE => $config");
 
     if (config == null) return;
 
